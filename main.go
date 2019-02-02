@@ -7,7 +7,6 @@ import (
 	"os"
 	"sync"
 
-	"github.com/anacrolix/torrent"
 	humanize "github.com/dustin/go-humanize"
 	"github.com/labstack/gommon/color"
 )
@@ -16,7 +15,6 @@ var stats = struct {
 	Size    int
 	Index   int
 	NbFiles int
-	Client  *torrent.Client
 }{}
 
 var checkPre = color.Yellow("[") + color.Green("✓") + color.Yellow("]")
