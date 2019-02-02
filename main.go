@@ -4,25 +4,31 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	"net/http"
 	"os"
+	"sync"
 
 	"github.com/anacrolix/torrent"
 	humanize "github.com/dustin/go-humanize"
 	"github.com/labstack/gommon/color"
 )
 
-var client = http.Client{}
+var stats = struct {
+	Size    int
+	Index   int
+	NbFiles int
+	Client  *torrent.Client
+}{}
 
 var checkPre = color.Yellow("[") + color.Green("✓") + color.Yellow("]")
 var tildPre = color.Yellow("[") + color.Green("~") + color.Yellow("]")
 var crossPre = color.Yellow("[") + color.Red("✗") + color.Yellow("]")
 
 func main() {
-	var size int64
-	i := 1
-	c, _ := torrent.NewClient(nil)
-	defer c.Close()
+	var worker sync.WaitGroup
+	var count int
+	var err error
+
+	stats.Index = 1
 
 	// Parse arguments
 	parseArgs(os.Args)
@@ -40,41 +46,25 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	nbFiles := len(files)
+	stats.NbFiles = len(files)
 	for _, f := range files {
-		torrent, err := c.AddTorrentFromFile(arguments.Input + "/" + f.Name())
-		if err != nil {
-			fmt.Println(crossPre +
-				color.Yellow(" [") +
-				color.Red(i) +
-				color.Yellow("/") +
-				color.Red(nbFiles) +
-				color.Yellow("] ") +
-				color.Red("Error: ") +
-				color.Yellow(err.Error()))
+		worker.Add(1)
+		count++
+		go calculateSize(f.Name(), &worker)
+		if count == arguments.Concurrency {
+			worker.Wait()
+			count = 0
 		}
-		<-torrent.GotInfo()
-		for _, file := range torrent.Files() {
-			size += file.Length()
-		}
-		fmt.Println(checkPre +
-			color.Yellow(" [") +
-			color.Green(i) +
-			color.Yellow("/") +
-			color.Green(nbFiles) +
-			color.Yellow("] ") +
-			color.Green(" Extracted size from ") +
-			color.Yellow(f.Name()))
-		torrent.Drop()
-		i++
 	}
+
+	worker.Wait()
 
 	fmt.Println(checkPre +
 		color.Yellow(" [") +
-		color.Green(i-1) +
+		color.Green(stats.Index-1) +
 		color.Yellow("/") +
-		color.Green(nbFiles) +
+		color.Green(stats.NbFiles) +
 		color.Yellow("] ") +
 		color.Green(" Total size: ") +
-		color.Yellow(humanize.Bytes(uint64(size))))
+		color.Yellow(humanize.Bytes(uint64(stats.Size))))
 }
